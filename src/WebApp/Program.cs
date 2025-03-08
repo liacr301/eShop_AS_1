@@ -1,5 +1,8 @@
 ﻿using eShop.WebApp.Components;
 using eShop.ServiceDefaults;
+using System.Reflection;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +11,28 @@ builder.AddServiceDefaults();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 builder.AddApplicationServices();
+
+builder.Services
+    .AddOpenTelemetry()
+    .WithTracing(tracerProviderBuilder =>
+    {
+        tracerProviderBuilder
+            .SetResourceBuilder(
+                ResourceBuilder
+                    .CreateDefault()
+                    .AddService(
+                        serviceName: "WebApp",
+                        serviceVersion: Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0"
+                    )
+            )
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddJaegerExporter(jaegerOptions =>
+            {
+                jaegerOptions.AgentHost = "localhost";
+                jaegerOptions.AgentPort = 6831;
+            });
+    });
 
 var app = builder.Build();
 

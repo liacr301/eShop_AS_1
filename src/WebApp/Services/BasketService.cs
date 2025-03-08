@@ -1,4 +1,5 @@
-﻿using eShop.Basket.API.Grpc;
+﻿using System.Diagnostics;
+using eShop.Basket.API.Grpc;
 using GrpcBasketItem = eShop.Basket.API.Grpc.BasketItem;
 using GrpcBasketClient = eShop.Basket.API.Grpc.Basket.BasketClient;
 
@@ -6,19 +7,33 @@ namespace eShop.WebApp.Services;
 
 public class BasketService(GrpcBasketClient basketClient)
 {
+    private static readonly ActivitySource ActivitySource = new("WebApp.BasketService.Client");
+
     public async Task<IReadOnlyCollection<BasketQuantity>> GetBasketAsync()
     {
-        var result = await basketClient.GetBasketAsync(new ());
+        using var activity = ActivitySource.StartActivity("GetBasket-ClientLogic");
+
+        // Exemplo: alguma tag que indique "lado do cliente" + ação
+        activity?.SetTag("client.call", "GetBasketAsync");
+
+        var result = await basketClient.GetBasketAsync(new());
         return MapToBasket(result);
     }
 
     public async Task DeleteBasketAsync()
     {
+        using var activity = ActivitySource.StartActivity("DeleteBasket-ClientLogic");
+        activity?.SetTag("client.call", "DeleteBasketAsync");
+
         await basketClient.DeleteBasketAsync(new DeleteBasketRequest());
     }
 
     public async Task UpdateBasketAsync(IReadOnlyCollection<BasketQuantity> basket)
     {
+        using var activity = ActivitySource.StartActivity("UpdateBasket-ClientLogic");
+        activity?.SetTag("client.call", "UpdateBasketAsync");
+        activity?.SetTag("client.itemCount", basket.Count);
+
         var updatePayload = new UpdateBasketRequest();
 
         foreach (var item in basket)

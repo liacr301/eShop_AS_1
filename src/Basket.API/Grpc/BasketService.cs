@@ -1,7 +1,10 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics; // Para ActivitySource
+using System.Diagnostics.CodeAnalysis;
 using eShop.Basket.API.Repositories;
 using eShop.Basket.API.Extensions;
 using eShop.Basket.API.Model;
+using Grpc.Core;
+using Microsoft.Extensions.Logging;
 
 namespace eShop.Basket.API.Grpc;
 
@@ -9,24 +12,33 @@ public class BasketService(
     IBasketRepository repository,
     ILogger<BasketService> logger) : Basket.BasketBase
 {
-    [AllowAnonymous]
+    // Fonte de spans customizados
+    private static readonly ActivitySource ActivitySource = new("Basket.API.Grpc.BasketService");
+
     public override async Task<CustomerBasketResponse> GetBasket(GetBasketRequest request, ServerCallContext context)
     {
+        // Cria um span específico para lógica de "GetBasket"
+        using var activity = ActivitySource.StartActivity("GetBasket-Logic");
+
         var userId = context.GetUserIdentity();
         if (string.IsNullOrEmpty(userId))
         {
             return new();
         }
 
-        if (logger.IsEnabled(LogLevel.Debug))
-        {
-            logger.LogDebug("Begin GetBasketById call from method {Method} for basket id {Id}", context.Method, userId);
-        }
+        // Exemplo: adicionar tag mascarando o userId se for email
+        activity?.SetTag("basket.userId", RedactEmail(userId)); 
+        activity?.SetTag("grpc.method", context.Method); // Qual método gRPC foi chamado
+
+        logger.LogDebug("Begin GetBasketById call from method {Method} for basket id {Id}", context.Method, userId);
 
         var data = await repository.GetBasketAsync(userId);
 
         if (data is not null)
         {
+            // Adiciona a quantidade de itens como tag
+            activity?.SetTag("basket.itemCount", data.Items.Count);
+
             return MapToCustomerBasketResponse(data);
         }
 
@@ -35,16 +47,19 @@ public class BasketService(
 
     public override async Task<CustomerBasketResponse> UpdateBasket(UpdateBasketRequest request, ServerCallContext context)
     {
+        using var activity = ActivitySource.StartActivity("UpdateBasket-Logic");
+
         var userId = context.GetUserIdentity();
         if (string.IsNullOrEmpty(userId))
         {
             ThrowNotAuthenticated();
         }
 
-        if (logger.IsEnabled(LogLevel.Debug))
-        {
-            logger.LogDebug("Begin UpdateBasket call from method {Method} for basket id {Id}", context.Method, userId);
-        }
+        activity?.SetTag("basket.userId", RedactEmail(userId));
+        activity?.SetTag("grpc.method", context.Method);
+        activity?.SetTag("grpc.requestItemsCount", request.Items.Count);  // Informa quantos itens foram enviados
+
+        logger.LogDebug("Begin UpdateBasket call from method {Method} for basket id {Id}", context.Method, userId);
 
         var customerBasket = MapToCustomerBasket(userId, request);
         var response = await repository.UpdateBasketAsync(customerBasket);
@@ -53,18 +68,29 @@ public class BasketService(
             ThrowBasketDoesNotExist(userId);
         }
 
+        // Se chegou aqui, a basket foi atualizada com sucesso
+        activity?.SetTag("basket.updatedItemCount", response.Items.Count);
+
         return MapToCustomerBasketResponse(response);
     }
 
     public override async Task<DeleteBasketResponse> DeleteBasket(DeleteBasketRequest request, ServerCallContext context)
     {
+        using var activity = ActivitySource.StartActivity("DeleteBasket-Logic");
+
         var userId = context.GetUserIdentity();
         if (string.IsNullOrEmpty(userId))
         {
             ThrowNotAuthenticated();
         }
 
+        activity?.SetTag("basket.userId", RedactEmail(userId));
+        activity?.SetTag("grpc.method", context.Method);
+
         await repository.DeleteBasketAsync(userId);
+        // Aqui pode definir alguma tag de status, se quiser
+        activity?.SetTag("basket.deleteStatus", "success");
+
         return new();
     }
 
@@ -107,5 +133,16 @@ public class BasketService(
         }
 
         return response;
+    }
+
+    // >>> Função auxiliar para mascarar
+    private static string RedactEmail(string email)
+    {
+        var atIndex = email.IndexOf('@');
+        if (atIndex > 1)
+        {
+            return email[0] + new string('*', atIndex - 1) + email.Substring(atIndex);
+        }
+        return "REDACTED";
     }
 }

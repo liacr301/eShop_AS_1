@@ -13,7 +13,6 @@ public class BasketService(GrpcBasketClient basketClient)
     {
         using var activity = ActivitySource.StartActivity("GetBasket-ClientLogic");
 
-        // Exemplo: alguma tag que indique "lado do cliente" + ação
         activity?.SetTag("client.call", "GetBasketAsync");
 
         var result = await basketClient.GetBasketAsync(new());
@@ -50,15 +49,20 @@ public class BasketService(GrpcBasketClient basketClient)
     }
 
     private static List<BasketQuantity> MapToBasket(CustomerBasketResponse response)
-    {
-        var result = new List<BasketQuantity>();
-        foreach (var item in response.Items)
-        {
-            result.Add(new BasketQuantity(item.ProductId, item.Quantity));
-        }
+{
+    using var activity = ActivitySource.StartActivity("MapToBasklientLogic");
 
-        return result;
+    activity?.SetTag("client.itemCount", response.Items.Count);
+
+    var result = new List<BasketQuantity>();
+    foreach (var item in response.Items)
+    {
+        result.Add(new BasketQuantity(item.ProductId, item.Quantity));
     }
+
+    return result;
+}
+
 }
 
 public record BasketQuantity(int ProductId, int Quantity);

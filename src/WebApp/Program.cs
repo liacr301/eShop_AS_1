@@ -31,7 +31,7 @@ builder.Services
             {
                 jaegerOptions.AgentHost = "localhost";
                 jaegerOptions.AgentPort = 6831;
-            });
+            }).AddConsoleExporter();
     });
 
 var app = builder.Build();

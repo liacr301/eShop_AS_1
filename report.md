@@ -3,133 +3,7 @@
 ## 1. Introduction
 
 This report details the integration of **OpenTelemetry** for distributed tracing and metrics collection in the eShop microservices architecture. It explains how telemetry data is collected, processed, and visualized using **OpenTelemetry Collector, Prometheus, and Grafana**.
-
-## 2. Project Overview
-
-### eShop Architecture
-- Microservices: Basket API, Catalog API, Ordering API, Identity API, etc.
-- Event-driven communication via **RabbitMQ**.
-- Uses **Redis** and **PostgreSQL** as data stores.
-- Dockerized deployment with **Docker Compose**.
-- Observability stack: **OpenTelemetry, Jaeger, Prometheus, and Grafana**.
-
-### Observability Goals
-- **Distributed Tracing:** Capture request flows across multiple services.
-- **Metrics Collection:** Track service health, error rates, and request performance.
-- **Data Scrubbing:** Ensure sensitive information is masked or excluded.
-
-## 3. Implementation
-
-### 3.1 OpenTelemetry Integration
-Each service is instrumented with **OpenTelemetry SDK** to export traces and metrics via the **OTLP protocol**.
-
-#### **Tracing Setup (Basket API)**
-```csharp
-builder.Services
-    .AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService("BasketService"))
-    .WithTracing(tracerProviderBuilder => tracerProviderBuilder
-        .AddAspNetCoreInstrumentation()
-        .AddGrpcClientInstrumentation()
-        .AddHttpClientInstrumentation()
-        .AddSqlClientInstrumentation()
-        .AddSource("BasketService")
-        .AddOtlpExporter(opt =>
-        {
-            opt.Endpoint = new Uri("http://otel-collector:4317");
-            opt.Protocol = OtlpExportProtocol.Grpc;
-        }));
-```
-
-#### **Metrics Setup (Basket API)**
-```csharp
-.WithMetrics(metricsProviderBuilder => metricsProviderBuilder
-    .AddAspNetCoreInstrumentation()
-    .AddMeter("BasketService")
-    .AddOtlpExporter(opt => 
-    {
-        opt.Endpoint = new Uri("http://otel-collector:4316");
-        opt.Protocol = OtlpExportProtocol.Grpc;
-    }));
-```
-
-### 3.2 OpenTelemetry Collector Configuration
-The **OpenTelemetry Collector** acts as a middleware to receive OTLP data and export it to **Jaeger (traces) and Prometheus (metrics)**.
-
-```yaml
-receivers:
-  otlp:
-    protocols:
-      grpc:
-        endpoint: "0.0.0.0:4316"
-processors:
-  batch: {}
-exporters:
-  prometheus:
-    endpoint: "0.0.0.0:8888"
-service:
-  pipelines:
-    metrics:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [prometheus]
-```
-
-### 3.3 Prometheus Configuration
-Prometheus scrapes metrics from the OpenTelemetry Collector at port **8888**.
-
-```yaml
-global:
-  scrape_interval: 5s
-scrape_configs:
-  - job_name: 'otel-collector'
-    static_configs:
-      - targets: ['otel-collector:8888']
-```
-
-### 3.4 Grafana Configuration
-Grafana is set up to visualize metrics collected in Prometheus.
-- **Datasource:** Prometheus (`http://prometheus:9090`)
-- **Dashboards:** Custom panels to monitor request rates, errors, and response times.
-
-#### Example Queries for Grafana Panels:
-- **Total Requests by Endpoint:**
-  ```promql
-  sum(basket_request_total) by (endpoint)
-  ```
-- **Error Rate:**
-  ```promql
-  sum(rate(basket_error_total[5m])) by (endpoint)
-  ```
-- **95th Percentile Response Time:**
-  ```promql
-  histogram_quantile(0.95, sum(rate(basket_request_duration_seconds_bucket[5m])) by (le, endpoint))
-  ```
-
-### 3.5 Data Scrubbing (Security & Compliance)
-- **Masked user emails and payment details** in logs and traces.
-- Example redaction function:
-```csharp
-private static string RedactId(string email)
-{
-    var atIndex = email.IndexOf('@');
-    return atIndex > 1 ? email[0] + new string('*', atIndex - 1) + email.Substring(atIndex) : "REDACTED";
-}
-```
-
-## 4. Results and Observations
-- **Traces successfully captured** in Jaeger showing request flow across services.
-- **Prometheus metrics collected** for request rates, latencies, and error counts.
-- **Grafana dashboards provide real-time insights** into service performance and reliability.
-
-## 5. Conclusion
-This implementation successfully integrates OpenTelemetry to provide observability in the eShop microservices architecture. The system now supports **end-to-end tracing, metrics visualization, and data scrubbing** for security compliance.
-
-# Observability and Monitoring in eShop with OpenTelemetry, Prometheus, and Grafana
-
-## 1. Introduction
-
-This report details the integration of **OpenTelemetry** for distributed tracing and metrics collection in the eShop microservices architecture. It explains how telemetry data is collected, processed, and visualized using **OpenTelemetry Collector, Prometheus, and Grafana**.
+Here's the github project link: https://github.com/liacr301/eShop_AS_1
 
 ## 2. Project Overview
 
@@ -175,6 +49,10 @@ The eShop observability architecture consists of multiple components working tog
 - Connects to Prometheus as a data source.
 - Provides real-time dashboards with visual insights into service health.
 - Enables alerting based on metric thresholds.
+
+
+![Architecture](AS_Arch.drawio.png)
+
 
 ## 4. Implementation
 
